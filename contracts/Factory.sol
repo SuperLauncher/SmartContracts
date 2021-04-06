@@ -50,6 +50,7 @@ contract Factory is IFactoryGetters, Ownable {
     /**
      * @dev Create a new campaign
      * @param _token - The token address
+     * @param _subIndex - The fund raising round Id
      * @param _campaignOwner - Campaign owner address
      * @param _stats - Array of 5 uint256 values.
      * @notice - [0] Softcap. 1e18 = 1 BNB.
@@ -75,7 +76,8 @@ contract Factory is IFactoryGetters, Ownable {
      */
 
     function createCampaign(
-        address _token,             
+        address _token,
+        uint256 _subIndex,             
         address _campaignOwner,     
         uint256[5] calldata _stats,  
         uint256[3] calldata _dates, 
@@ -102,14 +104,14 @@ contract Factory is IFactoryGetters, Ownable {
 
         // Boundary check: After deducting for fee, the Softcap amt left is enough to create the LP
         uint256 feeAmt = _stats[0].mul(_stats[3]).div(1e6);
-        require(_stats[0].sub(feeAmt) >= _liquidity[0], "Liquidity BNB amount is too high");
+        require(_stats[0].sub(feeAmt) > _liquidity[0], "Liquidity BNB amount is too high");
 
         if (_access == Campaign.Accessibility.WhitelistedFirstThenEveryone) {
             require((_dates[2] > _dates[0]) && (_dates[2] < _dates[1]) , "Invalid dates setup");
         }
         
         bytes memory bytecode = type(Campaign).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(_token, msg.sender));
+        bytes32 salt = keccak256(abi.encodePacked(_token, _subIndex, msg.sender));
         assembly {
             campaignAddress := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
@@ -177,6 +179,3 @@ contract Factory is IFactoryGetters, Ownable {
         return launcherTokenAddress;
     }
 }
-
-
-

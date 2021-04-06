@@ -4,8 +4,8 @@ const BigNumber = require("bignumber.js");
 async function main() {
 	// We get the contract to deploy
 
-	const factoryAddress = '0x097aCAf329f318eba3f749B5F941B14afACDF8A3';
-	const tokenAddress = '0x7AA5cA0F57Ffa5700269786484609f80185481c1';
+	const factoryAddress = '0xEAfFeA97CFAED58fb46255160D65d3d0C49eE85c';
+	const tokenAddress = '0xfc355A53094bCab803C7B8AcdE05bf6679662e0A';
 	const campaignOwner = '0x2f07026A89B1E4E3377e6dA46FD1AB4dD04a255C';
 
 	//token
@@ -20,12 +20,13 @@ async function main() {
 	const block = await ethers.provider.getBlock("latest");
 	//console.log(block);
 
-	const startDate = new BigNumber("1617209220");
+	const startDate = new BigNumber("1617723600");
 	const endDate = startDate.plus(600);
 	const midDate = startDate.plus(300);
 
 	const campaignAddress = await myFactory.createCampaign(
 		tokenAddress, //token
+		"1", //_subIndex
 		campaignOwner, //campaignOwner
 		["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"],
 		[startDate.toString(), endDate.toString(), midDate.toString()], //dates

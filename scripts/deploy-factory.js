@@ -3,12 +3,12 @@ const { ethers } = require("hardhat");
 async function main() {
 	// We get the contract to deploy
 	const BscLauncherToken = await ethers.getContractFactory(
-		"BscLauncherToken"
+		"SuperLauncherToken"
 	);
 	const bscLauncherToken = await BscLauncherToken.deploy();
 	await bscLauncherToken.deployed();
   
-	console.log("bscLauncherToken deployed to:", bscLauncherToken.address);
+	console.log("SuperLauncherToken deployed to:", bscLauncherToken.address);
 
 	const fee1 = '0x2f07026A89B1E4E3377e6dA46FD1AB4dD04a255C';
 	const fee2 = '0x2f07026A89B1E4E3377e6dA46FD1AB4dD04a255C';

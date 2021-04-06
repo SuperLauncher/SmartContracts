@@ -21,7 +21,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
-contract BscLauncherToken is
+contract SuperLauncherToken is
     ERC20,
     ERC20Burnable,
     Ownable
@@ -32,8 +32,10 @@ contract BscLauncherToken is
     /**
      * @dev - The max supply.
      */
-    uint256 internal constant INITIAL_SUPPLY = 10_000_000e18;
+    uint256 internal constant INITIAL_SUPPLY = 4_000_000e18;
     uint256 internal constant LOCKED_SUPPLY = 2_000_000e18;
+    uint256 public constant TOTAL_MAX_SUPPLY = 12_000_000e18;
+    
     
 
     /**
@@ -46,11 +48,19 @@ contract BscLauncherToken is
 
     constructor()
         public
-        ERC20("BSC Launcher", "LAUNCH")
+        ERC20("Super Launcher", "LAUNCH")
     {
-         _mint(msg.sender, INITIAL_SUPPLY);
-         _mint(address(this), LOCKED_SUPPLY);
-         lockStartTime = now;
+        _mint(msg.sender, INITIAL_SUPPLY);
+        _mint(address(this), LOCKED_SUPPLY);
+        lockStartTime = now;
+    }
+
+    /**
+     * @dev - Mint token
+     */
+    function mint(address _to, uint256 _amount) public onlyOwner {
+        require(ERC20.totalSupply() + _amount <= TOTAL_MAX_SUPPLY, "Max exceeded");
+        _mint(_to, _amount);
     }
 
     /**

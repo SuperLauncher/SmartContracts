@@ -59,7 +59,7 @@ contract SuperLauncherToken is
      * @dev - Mint token
      */
     function mint(address _to, uint256 _amount) public onlyOwner {
-        require(ERC20.totalSupply() + _amount <= TOTAL_MAX_SUPPLY, "Max exceeded");
+        require(ERC20.totalSupply().add(_amount) <= TOTAL_MAX_SUPPLY, "Max exceeded");
         _mint(_to, _amount);
     }
 

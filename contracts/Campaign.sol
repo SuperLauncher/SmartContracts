@@ -40,10 +40,14 @@ contract Campaign  {
     uint256 public midDate;         // Start of public sales for WhitelistedFirstThenEveryone type
     uint256 public minBuyLimit;            
     uint256 public maxBuyLimit;    
+    
     // Liquidity
     uint256 public lpBnbQty;    
     uint256 public lpTokenQty;
     uint256 public lpLockDuration; 
+    uint256[2] private lpInPool; // This is the actual LP provided in pool.
+    bool private recoveredUnspentLP;
+    
     // Config
     bool public burnUnSold;    
    
@@ -57,6 +61,10 @@ contract Campaign  {
     bool public finishUpSuccess; 
     bool public liquidityCreated;
     bool public cancelled;          
+
+   // Token claiming by users
+    mapping(address => bool) public claimedRecords; 
+    bool public tokenReadyToClaim;    
 
     // Map user address to amount invested in BNB //
     mapping(address => uint256) public participants; 
@@ -74,6 +82,10 @@ contract Campaign  {
     uint256 public numOfWhitelisted;
     mapping(address => bool) public whitelistedMap;
     
+
+    // Emergency transfer 
+    bool public emergencyApprovedByFactory;
+
     // Events
     event Purchased(
         address indexed user,
@@ -97,13 +109,17 @@ contract Campaign  {
         uint256 amount
     );
 
-    event Refund(
+    event TokenClaimed(
         address indexed user,
         uint256 timeStamp,
-        uint256 amountBnb,
         uint256 amountToken
     );
 
+    event Refund(
+        address indexed user,
+        uint256 timeStamp,
+        uint256 amountBnb
+    );
 
     modifier onlyFactory() {
         require(msg.sender == factory, "Only factory can call");
@@ -112,6 +128,11 @@ contract Campaign  {
 
     modifier onlyCampaignOwner() {
         require(msg.sender == campaignOwner, "Only campaign owner can call");
+        _;
+    }
+
+    modifier onlyFactoryOrCampaignOwner() {
+        require(msg.sender == factory || msg.sender == campaignOwner, "Only factory or campaign owner can call");
         _;
     }
 
@@ -172,7 +193,10 @@ contract Campaign  {
     // the campaign owner can retrieve back his funded tokens.
     function fundOut() external onlyCampaignOwner {
         require(failedOrCancelled(), "Only failed or cancelled campaign can un-fund");
-        sendAllTokensTo(campaignOwner);
+
+        ERC20 ercToken = ERC20(token);
+        uint256 totalTokens = ercToken.balanceOf(address(this));
+        sendTokensTo(campaignOwner, totalTokens);
         tokenFunded = false;
     }
 
@@ -195,7 +219,6 @@ contract Campaign  {
         require(msg.value <= getRemaining(),"Insufficent token left");
 
         uint256 buyAmt = calculateTokenAmount(msg.value);
-        ERC20(token).safeTransfer(msg.sender, buyAmt);
         
         if (invested == 0) {
             numOfParticipants = numOfParticipants.add(1);
@@ -205,6 +228,94 @@ contract Campaign  {
         collectedBNB = collectedBNB.add(msg.value);
 
         emit Purchased(msg.sender, block.timestamp, msg.value, buyAmt);
+    }
+
+    /**
+     * @dev Add liquidity and lock it up. Called after a campaign has ended successfully.
+     * @notice - Access control: Public
+     */
+
+    function addAndLockLP() public {
+
+        require(!isLive(), "Presale is still live");
+        require(!failedOrCancelled(), "Presale failed or cancelled , can't provide LP");
+        require(softCap <= collectedBNB, "Did not reach soft cap");
+
+        if ((lpBnbQty > 0 && lpTokenQty > 0) && !liquidityCreated) {
+        
+            liquidityCreated = true;
+
+            IFactoryGetters fact = IFactoryGetters(factory);
+            address lpRouterAddress = fact.getLpRouter();
+            ERC20(address(token)).approve(lpRouterAddress, lpTokenQty); // Uniswap doc says this is required //
+ 
+            (uint256 retTokenAmt, uint256 retBNBAmt, uint256 retLpTokenAmt) = IUniswapV2Router02(lpRouterAddress).addLiquidityETH
+                {value : lpBnbQty}
+                (address(token),
+                lpTokenQty,
+                0,
+                0,
+                address(this),
+                block.timestamp + 100000000);
+            
+            lpTokenAmount = retLpTokenAmt;
+            lpInPool[0] = retBNBAmt;
+            lpInPool[1] = retTokenAmt;
+
+            emit LiquidityAdded(retBNBAmt, retTokenAmt, retLpTokenAmt);
+            
+            unlockDate = (block.timestamp).add(lpLockDuration);
+            emit LiquidityLocked(block.timestamp, unlockDate);
+        }
+    }
+
+    /**
+     * @dev Get the actual liquidity added to LP Pool
+     * @return - uint256[2] consist of BNB amount, Token amount.
+     * @notice - Access control: Public, View
+     */
+    function getPoolLP() public view returns (uint256, uint256) {
+        return (lpInPool[0], lpInPool[1]);
+    }
+
+    /**
+     * @dev There are situations that the campaign owner might call this.
+     * @dev 1: Pancakeswap pool SC failure when we call addAndLockLP().
+     * @dev 2: Pancakeswap pool already exist. After we provide LP, thee's some excess bnb/tokens
+     * @dev 3: Campaign owner decided to change LP arrangement after campaign is successful.
+     * @dev In that case, campaign owner might recover it and provide LP manually.
+     * @dev Note: This function can only be called once by factory, as this is not a normal workflow.
+     * @notice - Access control: External, onlyFactory
+     */
+    function recoverUnspentLp() external onlyFactory {
+        
+        require(!recoveredUnspentLP, "You have already recovered unspent LP");
+        recoveredUnspentLP = true;
+
+        uint256 bnbAmt;
+        uint256 tokenAmt;
+
+        if (liquidityCreated) {
+            // Find out any excess bnb/tokens after LP provision is completed.
+            bnbAmt = lpBnbQty.sub(lpInPool[0]);
+            tokenAmt = lpTokenQty.sub(lpInPool[1]);
+        } else {
+            // liquidity not created yet. Just returns the full portion of the planned LP
+            // Only finished success campaign can recover Unspent LP
+            require(finishUpSuccess, "Campaign not finished successfully yet");
+            bnbAmt = lpBnbQty;
+            tokenAmt = lpTokenQty;
+        }
+
+        // Return bnb, token if any
+        if (bnbAmt > 0) {
+            (bool ok, ) = campaignOwner.call{value: bnbAmt}("");
+            require(ok, "Failed to return BNB Lp");
+        }
+
+        if (tokenAmt > 0) {
+            ERC20(token).safeTransfer(campaignOwner, tokenAmt);
+        }
     }
 
     /**
@@ -223,32 +334,12 @@ contract Campaign  {
         finishUpSuccess = true;
 
         uint256 feeAmt = getFeeAmt(collectedBNB);
+        uint256 unSoldAmtBnb = getRemaining();
         uint256 remainBNB = collectedBNB.sub(feeAmt);
         
         // If lpBnbQty, lpTokenQty is 0, we won't provide LP.
-        if ((lpBnbQty > 0 && lpTokenQty > 0) && !liquidityCreated) {
-        
-            IFactoryGetters fact = IFactoryGetters(factory);
-            address lpRouterAddress = fact.getLpRouter();
-            ERC20(address(token)).approve(lpRouterAddress, lpTokenQty);
- 
-            remainBNB = remainBNB.sub(lpBnbQty);          
-
-            (uint256 retTokenAmt, uint256 retBNBAmt, uint256 retLpTokenAmt) = IUniswapV2Router02(lpRouterAddress).addLiquidityETH
-                {value : lpBnbQty}
-                (address(token),
-                lpTokenQty,
-                0,
-                0,
-                address(this),
-                block.timestamp + 100000000);
-            
-            lpTokenAmount = retLpTokenAmt;
-            emit LiquidityAdded(retBNBAmt, retTokenAmt, retLpTokenAmt);
-            
-            liquidityCreated = true;
-            unlockDate = (block.timestamp).add(lpLockDuration);
-            emit LiquidityLocked(block.timestamp, unlockDate);
+        if ((lpBnbQty > 0 && lpTokenQty > 0)) {
+            remainBNB = remainBNB.sub(lpBnbQty);
         }
         
         // Send fee to fee address
@@ -261,8 +352,43 @@ contract Campaign  {
         (bool sentBnb, ) = campaignOwner.call{value: remainBNB}("");
         require(sentBnb, "Failed to send remain BNB to campaign owner");
 
-        // Burn or return UnSold token to owner 
-        sendAllTokensTo(burnUnSold ? BURN_ADDRESS : campaignOwner);       
+        // Calculate the unsold amount //
+        if (unSoldAmtBnb > 0) {
+            uint256 unsoldAmtToken = calculateTokenAmount(unSoldAmtBnb);
+            // Burn or return UnSold token to owner 
+            sendTokensTo(burnUnSold ? BURN_ADDRESS : campaignOwner, unsoldAmtToken);  
+        }     
+    }
+
+
+    /**
+     * @dev Allow either Campaign owner or Factory owner to call this
+     * @dev to set the flag to enable token claiming.
+     * @dev This is useful when 1 project has multiple campaigns that
+     * @dev to sync up the timing of token claiming After LP provision.
+     * @notice - Access control: External,  onlyFactoryOrCampaignOwner
+     */
+    function setTokenClaimable() external onlyFactoryOrCampaignOwner {
+
+        require(finishUpSuccess, "Campaign not finished successfully yet");
+        tokenReadyToClaim = true;
+    }
+
+    /**
+     * @dev Allow users to claim their tokens. 
+     * @notice - Access control: External
+     */
+    function claimTokens() external {
+
+        require(tokenReadyToClaim, "Tokens not ready to claim yet");
+        require( claimedRecords[msg.sender] == false, "You have already claimed");
+        
+        uint256 amtBought = getClaimableTokenAmt(msg.sender);
+        if (amtBought > 0) {
+            claimedRecords[msg.sender] = true;
+            ERC20(token).safeTransfer(msg.sender, amtBought);
+            emit TokenClaimed(msg.sender, block.timestamp, amtBought);
+        }
     }
 
      /**
@@ -291,28 +417,24 @@ contract Campaign  {
         uint256 investAmt = participants[msg.sender];
         require(investAmt > 0 ,"You didn't participate in the campaign");
 
-        uint256 returnTokenAmt = getReturnTokenAmt(msg.sender);
         participants[msg.sender] = 0;
         (bool ok, ) = msg.sender.call{value: investAmt}("");
         require(ok, "Failed to refund BNB to user");
-
-        // Participant need to transfer back their token to this contract. //
-        ERC20(token).safeTransferFrom(msg.sender, address(this), returnTokenAmt);
 
         if (numOfParticipants > 0) {
             numOfParticipants -= 1;
         }
 
-        emit Refund(msg.sender, block.timestamp, investAmt, returnTokenAmt);
+        emit Refund(msg.sender, block.timestamp, investAmt);
     }
 
     /**
-     * @dev To calculate the return token amount based on user's total invested BNB
+     * @dev To calculate the calimable token amount based on user's total invested BNB
      * @param _user - The user's wallet address
      * @return - The total amount of token
-     * @notice - Access control: Internal
+     * @notice - Access control: Public
      */
-     function getReturnTokenAmt(address _user) public view returns (uint256) {
+     function getClaimableTokenAmt(address _user) public view returns (uint256) {
         uint256 investAmt = participants[_user];
         return calculateTokenAmount(investAmt);
     }
@@ -374,17 +496,17 @@ contract Campaign  {
     /**
      * @dev To send all XYZ token to either campaign owner or burn address when campaign finishes or cancelled.
      * @param _to - The destination address
+     * @param _amount - The amount to send
      * @notice - Access control: Internal
      */
-    function sendAllTokensTo(address _to) internal {
+    function sendTokensTo(address _to, uint256 _amount) internal {
 
         // Security: Can only be sent back to campaign owner or burned //
         require((_to == campaignOwner)||(_to == BURN_ADDRESS), "Can only be sent to campaign owner or burn address");
 
          // Burn or return UnSold token to owner 
         ERC20 ercToken = ERC20(token);
-        uint256 all = ercToken.balanceOf(address(this));
-        ercToken.safeTransfer(_to, all);
+        ercToken.safeTransfer(_to, _amount);
     } 
      
     /**
@@ -450,13 +572,19 @@ contract Campaign  {
     function getRemaining() public view returns (uint256){
         return (hardCap).sub(collectedBNB);
     }
- 
 
     /**
      * @dev Set a campaign as cancelled.
+     * @dev This can only be set before tokenReadyToClaim, finishUpSuccess, liquidityCreated .
+     * @dev ie, the users can either claim tokens or get refund, but Not both.
      * @notice - Access control: Public, OnlyFactory
      */
     function setCancelled() onlyFactory public {
+
+        require(!tokenReadyToClaim, "Too late, tokens are claimable");
+        require(!finishUpSuccess, "Too late, finishUp called");
+        require(!liquidityCreated, "Too late, Lp created");
+
         cancelled = true;
     }
 
@@ -470,7 +598,7 @@ contract Campaign  {
     }
 
 
-       /**
+    /**
      * @dev Check whether the user address has enough Launcher Tokens to participate in project.
      * @param _user - The address of user
      * @return - Bool result
@@ -489,4 +617,5 @@ contract Campaign  {
         uint256 balance = ercToken.balanceOf(_user);
         return (balance >= qualifyingTokenQty);
     }
+
 }

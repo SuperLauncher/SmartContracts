@@ -22,7 +22,7 @@ import "./Campaign.sol";
 contract Factory is IFactoryGetters, Ownable {
     using SafeMath for uint256;
 
-    address public immutable launcherTokenAddress;
+    address private immutable launcherTokenAddress;
     
     struct CampaignInfo {
         address contractAddress;
@@ -149,6 +149,27 @@ contract Factory is IFactoryGetters, Ownable {
         Campaign camp = Campaign(info.contractAddress);
         camp.setCancelled();
     }
+
+    /**
+     * @dev Recover Unspent LP for a campaign
+     * @param _campaignID - The campaign ID
+     * @notice - Access control: External, OnlyOwner
+     */    
+    function recoverUnspentLp(uint256 _campaignID, address _campaignOwnerForCheck) external onlyOwner {
+
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+        require(info.owner == _campaignOwnerForCheck, "Invalid campaign owner"); // additional check
+        
+        Campaign camp = Campaign(info.contractAddress);
+        camp.recoverUnspentLp();
+    }
+
+
+    
+
 
 
     // IFactoryGetters

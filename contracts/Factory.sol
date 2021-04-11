@@ -104,7 +104,7 @@ contract Factory is IFactoryGetters, Ownable {
 
         // Boundary check: After deducting for fee, the Softcap amt left is enough to create the LP
         uint256 feeAmt = _stats[0].mul(_stats[3]).div(1e6);
-        require(_stats[0].sub(feeAmt) > _liquidity[0], "Liquidity BNB amount is too high");
+        require(_stats[0].sub(feeAmt) >= _liquidity[0], "Liquidity BNB amount is too high");
 
         if (_access == Campaign.Accessibility.WhitelistedFirstThenEveryone) {
             require((_dates[2] > _dates[0]) && (_dates[2] < _dates[1]) , "Invalid dates setup");

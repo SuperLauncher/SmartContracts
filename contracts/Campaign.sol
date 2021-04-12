@@ -82,10 +82,6 @@ contract Campaign  {
     uint256 public numOfWhitelisted;
     mapping(address => bool) public whitelistedMap;
     
-
-    // Emergency transfer 
-    bool public emergencyApprovedByFactory;
-
     // Events
     event Purchased(
         address indexed user,

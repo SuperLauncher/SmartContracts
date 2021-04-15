@@ -10,20 +10,20 @@ describe("LAUNCH TOKEN", function () {
 	it("Should create token successfully", async function () {
 		const [owner, addr1] = await ethers.getSigners();
 
-		const BscLauncherToken = await ethers.getContractFactory(
-			"BscLauncherToken"
+		const SuperLauncherToken = await ethers.getContractFactory(
+			"SuperLauncherToken"
 		);
 
-		bscLauncherToken = await BscLauncherToken.deploy();
+		bscLauncherToken = await SuperLauncherToken.deploy();
 		await bscLauncherToken.deployed();
 
 		expect(await bscLauncherToken.owner()).to.equal(owner.address);
 
 		expect(await bscLauncherToken.symbol()).to.equal("LAUNCH");
 
-		expect(await bscLauncherToken.name()).to.equal("BSC Launcher");
+		expect(await bscLauncherToken.name()).to.equal("Super Launcher");
 
-		expect(await bscLauncherToken.totalSupply()).to.equal("12000000000000000000000000");
+		expect(await bscLauncherToken.totalSupply()).to.equal("6000000000000000000000000");
 	});
 
 	it("Should able to un-lock token", async function () {
@@ -35,7 +35,7 @@ describe("LAUNCH TOKEN", function () {
 			.unlockTeamAllocation("0");
 
 		expect(await bscLauncherToken.balanceOf(owner.address)).to.equal(
-			"10050000000000000000000000"
+			"4050000000000000000000000"
 		);
 
 		//after 30 days
@@ -46,7 +46,7 @@ describe("LAUNCH TOKEN", function () {
 			.unlockTeamAllocation("1");
 
 		expect(await bscLauncherToken.balanceOf(owner.address)).to.equal(
-			"10550000000000000000000000"
+			"4550000000000000000000000"
 		);
 
 		//after 150 days
@@ -57,7 +57,7 @@ describe("LAUNCH TOKEN", function () {
 			.unlockTeamAllocation("2");
 
 		expect(await bscLauncherToken.balanceOf(owner.address)).to.equal(
-			"11250000000000000000000000"
+			"5250000000000000000000000"
 		);
 
 		//after 270 days
@@ -68,7 +68,7 @@ describe("LAUNCH TOKEN", function () {
 			.unlockTeamAllocation("3");
 
 		expect(await bscLauncherToken.balanceOf(owner.address)).to.equal(
-			"12000000000000000000000000"
+			"6000000000000000000000000"
 		);
 	});
 

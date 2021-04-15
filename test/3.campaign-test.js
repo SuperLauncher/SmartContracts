@@ -21,7 +21,7 @@ describe("Campaign", function () {
 		await mockBAT.deployed();
 
 		const BscLauncherToken = await ethers.getContractFactory(
-			"BscLauncherToken"
+			"SuperLauncherToken"
 		);
 		bscLauncherToken = await BscLauncherToken.deploy();
 		await bscLauncherToken.deployed();
@@ -59,6 +59,7 @@ describe("Campaign", function () {
 
 		const campaignAddres = await myFactory.connect(owner).createCampaign(
 			mockXYZ.address, //token
+			"0",
 			addr1.address, //campaignOwner
 			["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"], //min, max, fee, feePcnt, qualifyingTokenQty
 			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -73,6 +74,7 @@ describe("Campaign", function () {
 		await expect(
 			myFactory.connect(addr1).createCampaign(
 				mockXYZ.address, //token
+				"0", 
 				addr1.address, //campaignOwner
 				["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"],
 				[startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -96,6 +98,7 @@ describe("Campaign", function () {
 
 		const campaignAddres = await myFactory.createCampaign(
 			mockXYZ.address, //token
+			"0",
 			addr1.address, //campaignOwner
 			["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"],
 			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -147,6 +150,64 @@ describe("Campaign", function () {
 		expect(await campaignInstance.lpTokenAmount()).to.equal("0");
 	});
 
+	it("Should create 2 campaign with same token successfully", async function () {
+		const [owner, addr1] = await ethers.getSigners();
+
+		const block = await ethers.provider.getBlock("latest");
+		//console.log(block);
+
+		const startDate = new BigNumber(block.timestamp);
+		const endDate = startDate.plus(3600);
+		const midDate = startDate.plus(1800);
+
+		const campaignAddres = await myFactory.createCampaign(
+			mockXYZ.address, //token
+			"0",
+			addr1.address, //campaignOwner
+			["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"],
+			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
+			["1000000000000000", "20000000000000000"], //_buyLimits
+			"0", //access
+			["8000000000000000", "400000000000000000000", "1800"], //_liquidity
+			false//burn
+		);
+
+		const Campaign = await ethers.getContractFactory("Campaign");
+		//console.log(campaignAddres.value.toString());
+		const camIdxData = await myFactory.allCampaigns(
+			campaignAddres.value.toString()
+		);
+		const campaignInstance = await Campaign.attach(camIdxData.contractAddress);
+
+		//check campaign contract address
+		expect(await campaignInstance.campaignOwner()).to.equal(addr1.address);
+		//check token address
+		expect(await campaignInstance.token()).to.equal(mockXYZ.address);
+
+		const campaignAddres2 = await myFactory.createCampaign(
+			mockXYZ.address, //token
+			"1",
+			addr1.address, //campaignOwner
+			["10000000000000000", "20000000000000000", "1000000000000000000000", "0", "0"],
+			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
+			["1000000000000000", "20000000000000000"], //_buyLimits
+			"0", //access
+			["8000000000000000", "400000000000000000000", "1800"], //_liquidity
+			false//burn
+		);
+
+		const Campaign2 = await ethers.getContractFactory("Campaign");
+		//console.log(campaignAddres.value.toString());
+		const camIdxData2 = await myFactory.allCampaigns(
+			campaignAddres.value.toString()
+		);
+		const campaignInstance2 = await Campaign.attach(camIdxData2.contractAddress);
+
+		expect(await campaignInstance2.campaignOwner()).to.equal(addr1.address);
+		//check token address
+		expect(await campaignInstance2.token()).to.equal(mockXYZ.address);
+	});
+
 	it("Should able to fundIn and active campaign", async function () {
 		//console.log(await ethers.getSigners());
 		const [owner, addr1, addr2] = await ethers.getSigners();
@@ -160,12 +221,13 @@ describe("Campaign", function () {
 
 		const campaignAddres = await myFactory.createCampaign(
 			mockXYZ.address, //token
+			"0",
 			addr1.address, //campaignOwner
-			["2000000000000000000", "4000000000000000000", "18720000000000000000000", "0", "0"],
+			["1000000000000000000", "4000000000000000000", "18720000000000000000000", "0", "0"],
 			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
 			["1000000000000000000", "2000000000000000000"], //_buyLimits
 			"0", //access
-			["2000000000000000000", "400000000000000000000", "1800"], //_liquidity
+			["1000000000000000000", "400000000000000000000", "1800"], //_liquidity
 			false//burn
 		);
 
@@ -200,7 +262,17 @@ describe("Campaign", function () {
 			.connect(addr2)
 			.buyTokens({ value: "1000000000000000000" });
 
-		//user should get correct token after buying -> get 4680 XYZ
+		//after 3600 seconds
+		await ethers.provider.send("evm_increaseTime", [3600]);
+		
+		//admin call finish
+		await campaignInstance.connect(addr1).finishUp();
+		await campaignInstance.connect(addr1).setTokenClaimable();
+		
+		await campaignInstance
+			.connect(addr2)
+			.claimTokens();
+		//user should able to claim tokens -> get 4680 XYZ
 
 		expect((await mockXYZ.balanceOf(addr2.address)).toString()).to.equal(
 			"4680000000000000000000"
@@ -220,12 +292,13 @@ describe("Campaign", function () {
 
 		const campaignAddres = await myFactory.createCampaign(
 			mockBAT.address, //token
+			"0",
 			addr1.address, //campaignOwner
-			["2000000000000000000", "4000000000000000000", "4000000000", "0", "0"],
+			["1000000000000000000", "4000000000000000000", "4000000000", "0", "0"],
 			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
 			["1000000000000000000", "2000000000000000000"], //_buyLimits
 			"0", //access
-			["2000000000000000000", "400000000000000000000", "1800"], //_liquidity
+			["1000000000000000000", "400000000000000000000", "1800"], //_liquidity
 			false//burn
 		);
 
@@ -260,7 +333,20 @@ describe("Campaign", function () {
 			.connect(addr2)
 			.buyTokens({ value: "1000000000000000000" });
 
-		//user should get correct token after buying -> get 10 BAT
+				//after 3600 seconds
+				await ethers.provider.send("evm_increaseTime", [3600]);
+		
+				//admin call finish
+				await campaignInstance.connect(addr1).finishUp();
+				await campaignInstance.connect(addr1).setTokenClaimable();
+		
+		
+		//user should get correct token -> get 10 BAT
+
+		await campaignInstance
+		.connect(addr2)
+		.claimTokens();
+
 		expect((await mockBAT.balanceOf(addr2.address)).toString()).to.equal(
 			"1000000000"
 		);
@@ -278,6 +364,7 @@ describe("Campaign", function () {
 
 		const campaignAddres = await myFactory.createCampaign(
 			mockXYZ.address, //token
+			"0",
 			addr1.address, //campaignOwner
 			["2000000000000000000", "4000000000000000000", "18720000000000000000000", "0", "0"],
 			[startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -336,14 +423,6 @@ describe("Campaign", function () {
 			.connect(addr3)
 			.buyTokens({ value: "1000000000000000000" });
 
-		expect((await mockXYZ.balanceOf(addr2.address)).toString()).to.equal(
-			"4680000000000000000000"
-		);
-
-		//
-		expect((await mockXYZ.balanceOf(addr3.address)).toString()).to.equal(
-			"4680000000000000000000"
-		);
 		//only owner can remove an user from whitelist
 		await whiteListOnlyCampaign
 			.connect(addr1)
@@ -352,13 +431,6 @@ describe("Campaign", function () {
 		expect(
 			await whiteListOnlyCampaign.whitelistedMap(addr3.address)
 		).to.be.equal(false);
-
-		//user3 is not in whitelist, he can't buy
-		await expect(
-			whiteListOnlyCampaign
-				.connect(addr3)
-				.buyTokens({ value: "1000000000000000000" })
-		).to.be.revertedWith("You are not whitelisted");
 	});
 
 	it("Exceeded max amount", async function () {
@@ -401,6 +473,7 @@ describe("Campaign", function () {
 
 	    const campaignAddres = await myFactory.createCampaign(
 	      mockXYZ.address, //token
+		  "0",
 	      addr1.address, //campaignOwner
 		  ["2000000000000000000", "4000000000000000000", "18720000000000000000000", "0", "0"],
 		  [startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -441,10 +514,6 @@ describe("Campaign", function () {
 	      .connect(addr2)
 	      .buyTokens({ value: "1000000000000000000" });
 
-	    expect((await mockXYZ.balanceOf(addr2.address)).toString()).to.equal(
-	      "4680000000000000000000"
-	    );
-
 	    await expect(
 	      campaignInstance
 	        .connect(addr3)
@@ -457,10 +526,6 @@ describe("Campaign", function () {
 	    await campaignInstance
 	      .connect(addr3)
 	      .buyTokens({ value: "1000000000000000000" });
-	    expect((await mockXYZ.balanceOf(addr3.address)).toString()).to.equal(
-	      "4680000000000000000000"
-	    );
-		
 	  });
 
 	  it("Campaing is done, finishUp to withdraw BNB", async function () {
@@ -487,6 +552,7 @@ describe("Campaign", function () {
 
 	    const campaignAddres = await myFactory.createCampaign(
 	      mockXYZ.address, //token
+		  "0",
 	      addr1.address, //campaignOwner
 		  ["2000000000000000000", "4000000000000000000", "18720000000000000000000", "0", "0"],
 		  [startDate.toString(), endDate.toString(), midDate.toString()], //dates
@@ -497,7 +563,7 @@ describe("Campaign", function () {
 	    );
 
 	    const Campaign = await ethers.getContractFactory("Campaign");
-	    //console.log(campaignAddres.value.toString());
+
 	    const camIdxData = await myFactory.allCampaigns(
 	      campaignAddres.value.toString()
 	    );
@@ -521,11 +587,6 @@ describe("Campaign", function () {
 	    await campaignInstance
 	      .connect(addr4)
 	      .buyTokens({ value: "1000000000000000000" });
-
-	    //user should get correct token after buying -> get 4680 XYZ
-	    expect((await mockXYZ.balanceOf(addr4.address)).toString()).to.equal(
-	      "4680000000000000000000"
-	    );
 
 	    await ethers.provider.send("evm_mine", [endDate.plus(1).toNumber()]);
 

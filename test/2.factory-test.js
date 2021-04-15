@@ -14,7 +14,7 @@ describe("Factory", function () {
     await mockXYZ.deployed();
 
     const BscLauncherToken = await ethers.getContractFactory(
-      "BscLauncherToken"
+      "SuperLauncherToken"
     );
     bscLauncherToken = await BscLauncherToken.deploy();
     await bscLauncherToken.deployed();

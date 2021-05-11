@@ -167,6 +167,40 @@ contract Factory is IFactoryGetters, Ownable {
         camp.recoverUnspentLp();
     }
 
+    /**
+     * @dev Setup and turn on the vesting feature
+     * @param _campaignID - The campaign ID
+     * @param periods - Array of period of the vesting.
+     * @param percents - Array of percents release of the vesting.
+     * @notice - Access control: External. onlyFactory.
+     */  
+    function setupVestingMode(uint256 _campaignID, uint256[] calldata periods, uint256[] calldata percents) external onlyOwner {
+
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+
+        Campaign camp = Campaign(info.contractAddress);
+        camp.setupVestingMode(periods, percents);
+    }
+
+    /**
+     * @dev Start the vesting counter. This is normally done after public rounds and manual LP is provided.
+     * @param _campaignID - The campaign ID
+     * @notice - Access control: External. onlyFactory.
+     */  
+    function startVestingMode(uint256 _campaignID) external onlyOwner {
+
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+
+        Campaign camp = Campaign(info.contractAddress);
+        camp.startVestingMode();
+    }
+
 
     
 

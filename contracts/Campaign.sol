@@ -82,6 +82,23 @@ contract Campaign  {
     uint256 public numOfWhitelisted;
     mapping(address => bool) public whitelistedMap;
     
+
+    // Vesting Feature Support
+    uint256 internal constant PERCENT100 = 1e6;
+
+    struct VestingInfo {
+        uint256[]  periods;
+        uint256[]  percents;
+        uint256 totalVestedBnb;
+        uint256 startTime;
+        bool enabled;
+        bool vestingTimerStarted;
+    }
+    VestingInfo public vestInfo;
+    mapping(address=>mapping(uint256=>bool)) investorsClaimMap;
+    mapping(uint256=>bool) campaignOwnerClaimMap;
+
+
     // Events
     event Purchased(
         address indexed user,
@@ -344,9 +361,13 @@ contract Campaign  {
             require(sentFee, "Failed to send Fee to platform");
         }
 
-        // Send remain bnb to campaign owner
-        (bool sentBnb, ) = campaignOwner.call{value: remainBNB}("");
-        require(sentBnb, "Failed to send remain BNB to campaign owner");
+        // Send remain bnb to campaign owner if not in vested Mode
+        if (!vestInfo.enabled) {
+            (bool sentBnb, ) = campaignOwner.call{value: remainBNB}("");
+            require(sentBnb, "Failed to send remain BNB to campaign owner");
+        } else {
+            vestInfo.totalVestedBnb = remainBNB;
+        }
 
         // Calculate the unsold amount //
         if (unSoldAmtBnb > 0) {
@@ -365,8 +386,12 @@ contract Campaign  {
      * @notice - Access control: External,  onlyFactoryOrCampaignOwner
      */
     function setTokenClaimable() external onlyFactoryOrCampaignOwner {
-
+        
         require(finishUpSuccess, "Campaign not finished successfully yet");
+
+        // Token is only claimable in non-vested mode
+        require(!vestInfo.enabled, "Not applicable to vested mode");
+
         tokenReadyToClaim = true;
     }
 
@@ -379,7 +404,7 @@ contract Campaign  {
         require(tokenReadyToClaim, "Tokens not ready to claim yet");
         require( claimedRecords[msg.sender] == false, "You have already claimed");
         
-        uint256 amtBought = getClaimableTokenAmt(msg.sender);
+        uint256 amtBought = getTotalTokenPurchased(msg.sender);
         if (amtBought > 0) {
             claimedRecords[msg.sender] = true;
             ERC20(token).safeTransfer(msg.sender, amtBought);
@@ -425,12 +450,12 @@ contract Campaign  {
     }
 
     /**
-     * @dev To calculate the calimable token amount based on user's total invested BNB
+     * @dev To calculate the total token amount based on user's total invested BNB
      * @param _user - The user's wallet address
      * @return - The total amount of token
      * @notice - Access control: Public
      */
-     function getClaimableTokenAmt(address _user) public view returns (uint256) {
+     function getTotalTokenPurchased(address _user) public view returns (uint256) {
         uint256 investAmt = participants[_user];
         return calculateTokenAmount(investAmt);
     }
@@ -614,4 +639,109 @@ contract Campaign  {
         return (balance >= qualifyingTokenQty);
     }
 
+
+    // Vesting feature support
+    /**
+     * @dev Setup and turn on the vesting feature
+     * @param _periods - Array of period of the vesting.
+     * @param _percents - Array of percents release of the vesting.
+     * @notice - Access control: External. onlyFactory.
+     */  
+    function setupVestingMode(uint256[] calldata _periods, uint256[] calldata _percents) external onlyFactory {
+        uint256 len = _periods.length;
+        require(len>0, "Invalid length");
+        require(len == _percents.length, "Wrong ranges");
+
+        // check that all percentages should add up to 100% //
+        // 100% is 1e6
+        uint256 totalPcnt;
+        for (uint256 n=0; n<len; n++) {
+            totalPcnt = totalPcnt.add(_percents[n]);
+        }
+        require(totalPcnt == PERCENT100, "Percentages add up should be 100%");
+
+        vestInfo = VestingInfo({ periods:_periods, percents:_percents, totalVestedBnb:0, startTime:0, enabled:true, vestingTimerStarted:false});
+    }
+        
+
+    /**
+     * @dev Start the vesting counter. This is normally done after public rounds and manual LP is provided.
+     * @notice - Access control: External. onlyFactory.
+     */  
+    function startVestingMode() external onlyFactory {
+        require(finishUpSuccess, "Campaign not finished successfully yet");
+        require(vestInfo.enabled, "Vesting not enabled");
+
+        // Can be started only once 
+        require(!vestInfo.vestingTimerStarted, "Vesting already started");
+
+        vestInfo.startTime = now;
+        vestInfo.vestingTimerStarted = true;
+    }
+
+    /**
+     * @dev Check whether vesting feature is enabled
+     * @return - Bool result
+     * @notice - Access control: External. onlyFactory.
+     */  
+    function isVestingEnabled() external view returns(bool) {
+        return vestInfo.enabled;
+    }
+
+    /**
+     * @dev Check whether a particular vesting index has elapsed and claimable
+     * @return - Bool result
+     * @notice - Access control: Public.
+     */  
+    function isVestingClaimable(uint256 _index) public view returns(bool) {
+
+        if (!vestInfo.vestingTimerStarted) {
+            return false;
+        }
+        uint256 period = vestInfo.periods[_index];
+        return (now > vestInfo.startTime.add(period));
+    }
+
+    /**
+     * @dev Allow users to claim their vested token, according to the index of the vested period.
+     * @param _index - The index of the vesting period.
+     * @notice - Access control: External.
+     */  
+    function claimVestedTokens(uint256 _index) external {
+        
+        bool claimable = isVestingClaimable(_index);
+        require(claimable, "Not claimable at this time");
+
+        uint256 amtTotalToken = getTotalTokenPurchased(msg.sender);
+
+        require(amtTotalToken > 0, "You have not purchased the tokens");
+
+        bool claimed = investorsClaimMap[msg.sender][_index];
+        require(!claimed, "This vest amount is already claimed");
+
+        investorsClaimMap[msg.sender][_index] = true;
+        uint256 amtTokens = vestInfo.percents[_index].mul(amtTotalToken).div(PERCENT100);
+            
+        ERC20(token).safeTransfer(msg.sender, amtTokens);
+        emit TokenClaimed(msg.sender, block.timestamp, amtTokens);
+    }
+
+    /**
+     * @dev Allow campaign owner to claim their bnb, according to the index of the vested period.
+     * @param _index - The index of the vesting period.
+     * @notice - Access control: External. onlyCampaignOwner.
+     */  
+    function claimVestedBnb(uint256 _index) external onlyCampaignOwner {
+
+        bool claimable = isVestingClaimable(_index);
+        require(claimable, "Not claimable at this time");
+
+        require(!campaignOwnerClaimMap[_index], "This vest amount is already claimed");
+        campaignOwnerClaimMap[_index] = true;
+
+        uint256 amtBnb = vestInfo.percents[_index].mul(vestInfo.totalVestedBnb).div(PERCENT100);
+
+        (bool sentBnb, ) = campaignOwner.call{value: amtBnb}("");
+        require(sentBnb, "Failed to send remain BNB to campaign owner");
+    }
 }

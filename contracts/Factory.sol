@@ -170,11 +170,11 @@ contract Factory is IFactoryGetters, Ownable {
     /**
      * @dev Setup and turn on the vesting feature
      * @param _campaignID - The campaign ID
-     * @param periods - Array of period of the vesting.
-     * @param percents - Array of percents release of the vesting.
+     * @param _periods - Array of period of the vesting.
+     * @param _percents - Array of percents release of the vesting.
      * @notice - Access control: External. onlyFactory.
      */  
-    function setupVestingMode(uint256 _campaignID, uint256[] calldata periods, uint256[] calldata percents) external onlyOwner {
+    function setupVestingMode(uint256 _campaignID, uint256[] calldata _periods, uint256[] calldata _percents) external onlyOwner {
 
         require(_campaignID < count, "Invalid ID");
 
@@ -182,7 +182,7 @@ contract Factory is IFactoryGetters, Ownable {
         require(info.contractAddress != address(0), "Invalid Campaign contract");
 
         Campaign camp = Campaign(info.contractAddress);
-        camp.setupVestingMode(periods, percents);
+        camp.setupVestingMode(_periods, _percents);
     }
 
     /**

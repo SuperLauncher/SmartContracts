@@ -690,16 +690,22 @@ contract Campaign  {
 
     /**
      * @dev Check whether a particular vesting index has elapsed and claimable
-     * @return - Bool result
+     * @return - Bool: Claimable, uint256: If started and not claimable, returns the time needed to be claimable.
      * @notice - Access control: Public.
      */  
-    function isVestingClaimable(uint256 _index) public view returns(bool) {
+    function isVestingClaimable(uint256 _index) public view returns(bool, uint256) {
 
         if (!vestInfo.vestingTimerStarted) {
-            return false;
+            return (false,0);
         }
         uint256 period = vestInfo.periods[_index];
-        return (now > vestInfo.startTime.add(period));
+        uint256 releaseTime = vestInfo.startTime.add(period);
+        bool claimable = (now > releaseTime);
+        uint256 remainTime;
+        if (!claimable) {
+            remainTime = releaseTime.sub(now); 
+        }
+        return (claimable, remainTime);
     }
 
     /**
@@ -709,7 +715,7 @@ contract Campaign  {
      */  
     function claimVestedTokens(uint256 _index) external {
         
-        bool claimable = isVestingClaimable(_index);
+        (bool claimable, ) = isVestingClaimable(_index);
         require(claimable, "Not claimable at this time");
 
         uint256 amtTotalToken = getTotalTokenPurchased(msg.sender);
@@ -733,7 +739,7 @@ contract Campaign  {
      */  
     function claimVestedBnb(uint256 _index) external onlyCampaignOwner {
 
-        bool claimable = isVestingClaimable(_index);
+        (bool claimable, ) = isVestingClaimable(_index);
         require(claimable, "Not claimable at this time");
 
         require(!campaignOwnerClaimMap[_index], "This vest amount is already claimed");
@@ -743,5 +749,42 @@ contract Campaign  {
 
         (bool sentBnb, ) = campaignOwner.call{value: amtBnb}("");
         require(sentBnb, "Failed to send remain BNB to campaign owner");
+    }
+
+     /**
+     * @dev To get the next vesting claim for a user.
+     * @param _user - The user's address.
+     * @return - int256 : the next period. -1 to indicate none found.
+     * @return - uint256 : the amount of token claimable
+     * @return - uint256 : time left to claim. If 0 (and next claim period is valid), it is currently claimable.
+     * @notice - Access control: External. View.
+     */  
+    function getNextVestingClaim(address _user) external view returns(int256, uint256, uint256) {
+
+        if (!vestInfo.vestingTimerStarted) {
+            return (-1,0,0);
+        }
+
+        uint256 amtTotalToken = getTotalTokenPurchased(_user);
+        if (amtTotalToken==0) {
+            return (-1,0,0);
+        }
+
+        uint256 len = vestInfo.periods.length;
+        for (uint256 n=0; n<len; n++) {
+            (bool claimable, uint256 time) = isVestingClaimable(n);
+            uint256 amtTokens = vestInfo.percents[n].mul(amtTotalToken).div(PERCENT100);
+            bool claimed = investorsClaimMap[_user][n];
+           
+            if (!claimable) {
+                return (int256(n), amtTokens, time);
+            } else {
+                if (!claimed) {
+                    return ( int256(n), amtTokens, 0);
+                }
+            }
+        }
+        // All claimed 
+        return (-1,0,0);
     }
 }

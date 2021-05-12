@@ -150,6 +150,21 @@ contract Factory is IFactoryGetters, Ownable {
         camp.setCancelled();
     }
 
+
+    /**
+     * @dev Add liquidity and lock it up. Called after a campaign has ended successfully.
+     * @notice - Access control: External. OnlyOwner.
+     */
+    function addAndLockLP(uint256 _campaignID) external onlyOwner {
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+        
+        Campaign camp = Campaign(info.contractAddress);
+        camp.addAndLockLP();
+    }
+
     /**
      * @dev Recover Unspent LP for a campaign
      * @param _campaignID - The campaign ID

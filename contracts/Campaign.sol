@@ -245,10 +245,11 @@ contract Campaign  {
 
     /**
      * @dev Add liquidity and lock it up. Called after a campaign has ended successfully.
-     * @notice - Access control: Public
+     * @notice - Access control: Public. onlyFactoryOrCampaignOwner. This allows the admin or campaignOwner to
+     * coordinate the adding of LP when all campaigns are completed. This ensure a fairer arrangement, esp
+     * when multiple campaigns are running in parallel.
      */
-
-    function addAndLockLP() public {
+    function addAndLockLP() public onlyFactoryOrCampaignOwner {
 
         require(!isLive(), "Presale is still live");
         require(!failedOrCancelled(), "Presale failed or cancelled , can't provide LP");

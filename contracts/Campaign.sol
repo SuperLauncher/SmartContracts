@@ -467,7 +467,7 @@ contract Campaign  {
      * @param _addresses - Array of addresses
      * @notice - Access control: Public, OnlyCampaignOwner
      */
-    function appendWhitelisted(address[] memory _addresses) public onlyCampaignOwner {
+    function appendWhitelisted(address[] memory _addresses) public onlyFactory {
         uint256 len = _addresses.length;
         for (uint256 n=0; n<len; n++) {
             address a = _addresses[n];
@@ -483,7 +483,7 @@ contract Campaign  {
      * @param _addresses - Array of addresses
      * @notice - Access control: Public, OnlyCampaignOwner
      */
-    function removeWhitelisted(address[] memory _addresses) public onlyCampaignOwner {
+    function removeWhitelisted(address[] memory _addresses) public onlyFactory {
         uint256 len = _addresses.length;
         for (uint256 n=0; n<len; n++) {
             address a = _addresses[n];
@@ -602,6 +602,13 @@ contract Campaign  {
      * @notice - Access control: Public, OnlyFactory
      */
     function setCancelled() onlyFactory public {
+
+        // If we are in VestingMode, then we should be able to cancel even if finishUp() is called 
+        if (vestInfo.enabled && !vestInfo.vestingTimerStarted)
+        {
+            cancelled = true;
+            return;
+        }
 
         require(!tokenReadyToClaim, "Too late, tokens are claimable");
         require(!finishUpSuccess, "Too late, finishUp called");

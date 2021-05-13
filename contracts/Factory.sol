@@ -152,6 +152,40 @@ contract Factory is IFactoryGetters, Ownable {
 
 
     /**
+     * @dev Append whitelisted addresses to a campaign
+     * @param _campaignID - The campaign ID
+     * @param _addresses - Array of addresses
+     * @notice - Access control: External, OnlyOwner
+     */   
+    function appendWhitelisted(uint256 _campaignID, address[] memory _addresses) external onlyOwner {
+        
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+        
+        Campaign camp = Campaign(info.contractAddress);
+        camp.appendWhitelisted(_addresses);
+    }
+
+    /**
+     * @dev Remove whitelisted addresses from a campaign
+     * @param _campaignID - The campaign ID
+     * @param _addresses - Array of addresses
+     * @notice - Access control: External, OnlyOwner
+     */  
+    function removeWhitelisted(uint256 _campaignID, address[] memory _addresses) external onlyOwner {
+
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+        
+        Campaign camp = Campaign(info.contractAddress);
+        camp.removeWhitelisted(_addresses);
+    }
+
+    /**
      * @dev Add liquidity and lock it up. Called after a campaign has ended successfully.
      * @notice - Access control: External. OnlyOwner.
      */

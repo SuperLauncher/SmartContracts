@@ -261,7 +261,7 @@ contract Campaign {
 
             IFactoryGetters fact = IFactoryGetters(factory);
             address lpRouterAddress = fact.getLpRouter();
-            ERC20(address(token)).approve(lpRouterAddress, lpTokenQty); // Uniswap doc says this is required //
+            require(ERC20(address(token)).approve(lpRouterAddress, lpTokenQty)); // Uniswap doc says this is required //
  
             (uint256 retTokenAmt, uint256 retBNBAmt, uint256 retLpTokenAmt) = IUniswapV2Router02(lpRouterAddress).addLiquidityETH
                 {value : lpBnbQty}

@@ -85,7 +85,7 @@ contract Factory is IFactoryGetters, Ownable {
         Campaign.Accessibility _access,  
         uint256[3] calldata _liquidity, 
         bool _burnUnSold  
-    ) public onlyOwner returns (address campaignAddress)
+    ) external onlyOwner returns (address campaignAddress)
     {
         require(_stats[0] < _stats[1],"Soft cap can't be higher than hard cap" );
         require(_stats[2] > 0,"Token for sales can't be 0");

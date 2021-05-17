@@ -22,7 +22,7 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Interfaces.sol";
  
-contract Campaign  {
+contract Campaign {
     using Address for address;
     using SafeMath for uint256;
     using SafeERC20 for ERC20;
@@ -249,7 +249,7 @@ contract Campaign  {
      * coordinate the adding of LP when all campaigns are completed. This ensure a fairer arrangement, esp
      * when multiple campaigns are running in parallel.
      */
-    function addAndLockLP() public onlyFactoryOrCampaignOwner {
+    function addAndLockLP() external onlyFactoryOrCampaignOwner {
 
         require(!isLive(), "Presale is still live");
         require(!failedOrCancelled(), "Presale failed or cancelled , can't provide LP");
@@ -288,7 +288,7 @@ contract Campaign  {
      * @return - uint256[2] consist of BNB amount, Token amount.
      * @notice - Access control: Public, View
      */
-    function getPoolLP() public view returns (uint256, uint256) {
+    function getPoolLP() external view returns (uint256, uint256) {
         return (lpInPool[0], lpInPool[1]);
     }
 
@@ -339,7 +339,7 @@ contract Campaign  {
      * @dev Anyone can call. Only called once.
      * @notice - Access control: Public
      */
-    function finishUp() public {
+    function finishUp() external {
        
         require(!finishUpSuccess, "finishUp is already called");
         require(!isLive(), "Presale is still live");
@@ -420,7 +420,7 @@ contract Campaign  {
      * @param _lpToken - The LP token address
      * @notice - Access control: Internal, OnlyCampaignOwner
      */
-    function withdrawLP(address _lpToken,uint256 _amount) public onlyCampaignOwner 
+    function withdrawLP(address _lpToken,uint256 _amount) external onlyCampaignOwner 
     {
         require(liquidityCreated, "liquidity is not yet created");
         require(block.timestamp >= unlockDate ,"Unlock date not reached");
@@ -433,7 +433,7 @@ contract Campaign  {
      * @dev Allows Participants to withdraw/refunds when campaign fails
      * @notice - Access control: Public
      */
-    function refund() public {
+    function refund() external {
         require(failedOrCancelled(),"Can refund for failed or cancelled campaign only");
 
         uint256 investAmt = participants[msg.sender];
@@ -467,7 +467,7 @@ contract Campaign  {
      * @param _addresses - Array of addresses
      * @notice - Access control: Public, OnlyCampaignOwner
      */
-    function appendWhitelisted(address[] memory _addresses) public onlyFactory {
+    function appendWhitelisted(address[] memory _addresses) external onlyFactory {
         uint256 len = _addresses.length;
         for (uint256 n=0; n<len; n++) {
             address a = _addresses[n];
@@ -483,7 +483,7 @@ contract Campaign  {
      * @param _addresses - Array of addresses
      * @notice - Access control: Public, OnlyCampaignOwner
      */
-    function removeWhitelisted(address[] memory _addresses) public onlyFactory {
+    function removeWhitelisted(address[] memory _addresses) external onlyFactory {
         uint256 len = _addresses.length;
         for (uint256 n=0; n<len; n++) {
             address a = _addresses[n];
@@ -601,7 +601,7 @@ contract Campaign  {
      * @dev ie, the users can either claim tokens or get refund, but Not both.
      * @notice - Access control: Public, OnlyFactory
      */
-    function setCancelled() onlyFactory public {
+    function setCancelled() onlyFactory external {
 
         // If we are in VestingMode, then we should be able to cancel even if finishUp() is called 
         if (vestInfo.enabled && !vestInfo.vestingTimerStarted)

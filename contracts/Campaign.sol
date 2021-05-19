@@ -380,13 +380,13 @@ contract Campaign {
 
 
     /**
-     * @dev Allow either Campaign owner or Factory owner to call this
-     * @dev to set the flag to enable token claiming.
-     * @dev This is useful when 1 project has multiple campaigns that
+     * @dev Allow Factory owner to call this to set the flag to
+     * @dev enable token claiming.
+     * @dev This is useful when 1 project has multiple campaigns that need
      * @dev to sync up the timing of token claiming After LP provision.
-     * @notice - Access control: External,  onlyFactoryOrCampaignOwner
+     * @notice - Access control: External,  onlyFactory
      */
-    function setTokenClaimable() external onlyFactoryOrCampaignOwner {
+    function setTokenClaimable() external onlyFactory {
         
         require(finishUpSuccess, "Campaign not finished successfully yet");
 

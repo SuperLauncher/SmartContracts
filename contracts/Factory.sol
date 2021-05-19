@@ -186,6 +186,25 @@ contract Factory is IFactoryGetters, Ownable {
     }
 
     /**
+     * @dev Allow Factory owner to call this to set the flag to
+     * @dev enable token claiming.
+     * @dev This is useful when 1 project has multiple campaigns that need
+     * @dev to sync up the timing of token claiming After LP provision.
+     * @notice - Access control: External,  onlyFactory
+     */
+    function setTokenClaimable(uint256 _campaignID) external onlyOwner {
+
+        require(_campaignID < count, "Invalid ID");
+
+        CampaignInfo memory info = allCampaigns[_campaignID];
+        require(info.contractAddress != address(0), "Invalid Campaign contract");
+        
+        Campaign camp = Campaign(info.contractAddress);
+        camp.setTokenClaimable();
+    }
+
+
+    /**
      * @dev Add liquidity and lock it up. Called after a campaign has ended successfully.
      * @notice - Access control: External. OnlyOwner.
      */
